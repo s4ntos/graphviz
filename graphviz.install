@@ -10,21 +10,15 @@ function graphviz_requirements($phase) {
     $t = get_t();
 
     // Check for availability of GraphViz PHP library.
-    $graphvizlib = (bool)(($handle = @fopen(_graphviz_create_filepath(variable_get('graphviz_lib_path', ''), 'libgv-php5/gv.php'), 'r', TRUE)) && fclose($handle));
+    $graphvizlib = (bool)(extension_loaded('gd') && function_exists('gd_info'));
     $requirements['Graphviz PHP Library'] = array(
       'title' => $t('Graphviz PHP Library package'),
       'value' => $graphvizlib ? $t('The Graphviz PHP Library was found.') : 
                          $t('The Graphviz PHP Library was not found. 
-                             Graphviz Filter may  still function normally but is not supported'),
+                             Graphviz Filter will not work'),
       'severity' => $graphvizlib ? REQUIREMENT_OK : REQUIREMENT_ERROR,
     );
+
+    
   return $requirements;
 }
-
-function _graphviz_create_filepath($path, $filename) {
-  if (!empty($path)) {
-    return rtrim($path, '/') .'/'. $filename;
-  }
-  return $filename;
-}
-

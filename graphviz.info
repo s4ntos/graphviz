@@ -1,11 +1,9 @@
-; $Id: graphviz_filter.info,v 1.1.4.4 2009/10/03 18:29:22 kratib Exp $ 
 name = Graphviz Filter
 description = "Treats input text as DOT syntax and passes it to dot, neato or other, embedding the output into the page."
 package = Filters
 core = 6.x
 
-; Information added by drupal.org packaging script on 2010-02-10
-version = "6.x-1.6"
+version = "6.x-0.9"
 core = "6.x"
 project = "graphviz"
 datestamp = "1265841009"

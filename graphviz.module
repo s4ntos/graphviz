@@ -54,7 +54,7 @@ function graphviz_file_download($file) {
   $file = file_create_path($file);
   if (strpos($file, file_directory_path() .'/graphviz') !== FALSE) {
     return array(
-      'Content-Length: '.filesize($file),
+      'Content-Length: '.filesize($file)
     );
   }
 }
@@ -95,9 +95,13 @@ function _graphviz_settings() {
   );
 
   $types = node_get_types();
+  $info = _content_type_info();
+  
   foreach ($types as $node ) {
     $selectable_node_types[$node->type] = t('!name (!desc)',
     array('!name' => $node->name, '!desc' => $node->description));
+    if (!empty($info['content types'][$node->type]['fields']))
+    	dpm ("Found fields");
   }
   $form['graphviz']['graphviz_nt']['graphviz_selected_node_types'] = array(
     '#title' => '',
@@ -114,39 +118,34 @@ function _graphviz_process($matches) {
 }
 
 function graphviz_process($text) {
-  // Parse arguments.
-  // dpm("I'm inside the process function $text");
-    
-  // Add usefull information
+  // Start to build the image   
+  // By Adding usefull information
+  // dpm((array)variable_get('graphviz_selected_node_types', array()));
   $g = gv::readstring($text);
   $n = gv::firstnode($g);
   while (gv::ok($n)) {
-   //$text = $text.'node '.gv::nameof($n).' ';
    $e = gv::firstout($n);
    $url = gv::getv($n,'URL');
-   $db_result = db_query(db_rewrite_sql("SELECT n.nid, n.type, n.title FROM {node} n WHERE LOWER(n.title) = LOWER('%s')", 't', 'tid'), trim(gv::nameof($n)));
-   $result = array();
-   while ($term = db_fetch_object($db_result)) {
-    $result[] = $term;
-   }
-   //dpm ("Node Name:".$node[0]->name." GV name: ".gv::nameof($n)." ".count($node));
-   if (count($result)>0) {
-   	 dpm ($result);
-   	 $url =  url('/node/'.$result[0]->nid);
-     gv::setv($n,'URL',$url);
+   $node = node_load(array('title' => gv::nameof($n)));
+   if (!empty($node) && $node->status == 1) {
+   	 $url = gv::getv($n,'URL');
+   	 if (empty($url)) {
+   	    $url =  url('/node/'.$node->nid);
+   	 };
+   	 gv::setv($n,'URL',$url);
      gv::setv($n,'shape','tab');
-     gv::setv($n,'label','<<table border="0" cellborder="0" cellpadding="3" bgcolor="white"><tr><td bgcolor="black" align="center" colspan="2"><font color="white">'.$result[0]->type.'</font></td></tr><tr><td align="left" port="r4">'.$result[0]->title.'</td><td bgcolor="grey" align="right">1</td></tr></table>>');
-     switch ($result[0]->type) {
+     gv::setv($n,'label','<<table border="0" cellborder="0" cellpadding="3" bgcolor="white"><tr><td bgcolor="black" align="center" colspan="2"><font color="white">'.$node->type.'</font></td></tr><tr><td align="left" port="r4">'.$node->title.'</td><td bgcolor="grey" align="right">1</td></tr></table>>');
+     switch ($node->type) {
         case 'page':
            gv::setv($n,'shape','component');
            break;
-        case 'story':
+        case 'story':$url =  url('/node/'.$node->nid);
+     
            gv::setv($n,'shape','folder');
            break; 
      } 
    }
    while (gv::ok($e)) {
-      //$text = $text.'edge '.gv::nameof(gv::tailof($e)).'->'.gv::nameof(gv::headof($e)).' ';
       $e = gv::nextout($n,$e);
    }
    $n = gv::nextnode($g,$n);
@@ -160,14 +159,21 @@ function graphviz_process($text) {
   file_check_directory($outdir, FILE_CREATE_DIRECTORY);
   $inpath = file_create_path($outdir .'/'. md5($text) .'.dot');
   file_put_contents($inpath, $text);
-  //dpm("I'm inside the process function $inpath , $text");
     
   // Render desired formats.
   $output = '';
-  $outpath = file_create_path($outdir .'/'. md5($text) .'.svg');
-  if (file_exists($outpath) || gv::render($g,'svg',$outpath)) {
+  $outpath = file_create_path($outdir .'/'. md5($text) );
+  if (file_exists($outpath.'.svg') || ( gv::render($g,'svg',$outpath.'.svg') && gv::render($g,'cmapx',$outpath.'.map')) ) {
   	$output .= '<div class="graphviz graphviz-"'. $formats[$format]['format'] .'>';
-    $output .= '<embed type="image/svg+xml" src="'. file_create_url($outpath) .'"  />';
+    $output .= '<img src="'. file_create_url($outpath).'.svg" ';
+    $map = file_get_contents($outpath.'.map');
+    $match = array();
+    if (preg_match('/<map[^>]*id\s*=\s*"(.*?)"/', $map, $match)) {
+      $id = $match[1];
+    }
+    $output .= 'usemap="#'.$id.'" />';
+    $output .= $map;
+    $output .= "\n";
     $output .= '</div>';
   } else {
     $msg = 'Graphviz encountered an error while rendering to format %format:%outfile<br />';

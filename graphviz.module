@@ -88,6 +88,14 @@ function _graphviz_settings() {
   //
   // selectable node types
   //
+  $form['graphviz']['graphviz_format'] = array(
+    '#title' => t('Selectable format types for images'),
+    '#description' => t('Select the type of image that will be produced.'),
+    '#type' => 'select',
+    '#defaul_value' => variable_get('graphviz_format','svg'),
+    '#options' => array('svg' => t('svg'), 'png' => t('png')),
+  );
+  
   $form['graphviz']['graphviz_nt'] = array(
     '#title' => t('Selectable node types'),
     '#description' => t('Select the node types that can be resubmitted.'),
@@ -96,12 +104,13 @@ function _graphviz_settings() {
 
   $types = node_get_types();
   $info = _content_type_info();
-  
+  $node_fields = array();
   foreach ($types as $node ) {
     $selectable_node_types[$node->type] = t('!name (!desc)',
     array('!name' => $node->name, '!desc' => $node->description));
     if (!empty($info['content types'][$node->type]['fields']))
-    	dpm ("Found fields");
+    	foreach ($info['content types'][$node->type]['fields'] as $field)
+           $node_fields[$node->type][$field['field_name']] = $field['field_name'];
   }
   $form['graphviz']['graphviz_nt']['graphviz_selected_node_types'] = array(
     '#title' => '',
@@ -109,7 +118,21 @@ function _graphviz_settings() {
     '#options' => $selectable_node_types,
     '#default_value' => (array)variable_get('graphviz_selected_node_types', array()),
   );
-  
+  foreach (variable_get('graphviz_selected_node_types', array()) as $nodetype) {
+  	if (!empty($node_fields[$nodetype])) {
+	   $form['graphviz']['graphviz_'.$nodetype] = array(
+           '#title' => t('Select fields to show for '.$nodetype),
+           '#description' => t('Select fields you want to show.'),
+           '#type' => 'fieldset',
+       );  	
+       $form['graphviz']['graphviz_'.$nodetype]['graphviz_'.$nodetype.'_fields'] = array(
+           '#title' => '',
+           '#type' => 'checkboxes',
+           '#options' => $node_fields[$nodetype],
+           '#default_value' => (array)variable_get('graphviz_'.$nodetype.'_fields', array()),
+       );
+  	}	
+  }
   return $form;
 }
 
@@ -120,13 +143,13 @@ function _graphviz_process($matches) {
 function graphviz_process($text) {
   // Start to build the image   
   // By Adding usefull information
-  // dpm((array)variable_get('graphviz_selected_node_types', array()));
   $g = gv::readstring($text);
   $n = gv::firstnode($g);
   while (gv::ok($n)) {
    $e = gv::firstout($n);
-   $url = gv::getv($n,'URL');
-   $node = node_load(array('title' => gv::nameof($n)));
+   $placeover = db_placeholders(array_filter((array)variable_get('graphviz_selected_node_types', array())),'varchar');
+   $db_result = db_query("SELECT n.nid, n.vid, n.type, n.title, n.status FROM {node} n WHERE LOWER(n.title) = LOWER('%s') and n.type in (".$placeover.")", array_merge((array)trim(gv::nameof($n)),array_filter(variable_get('graphviz_selected_node_types', array()))));
+   $node = db_fetch_object($db_result);
    if (!empty($node) && $node->status == 1) {
    	 $url = gv::getv($n,'URL');
    	 if (empty($url)) {
@@ -134,7 +157,13 @@ function graphviz_process($text) {
    	 };
    	 gv::setv($n,'URL',$url);
      gv::setv($n,'shape','tab');
-     gv::setv($n,'label','<<table border="0" cellborder="0" cellpadding="3" bgcolor="white"><tr><td bgcolor="black" align="center" colspan="2"><font color="white">'.$node->type.'</font></td></tr><tr><td align="left" port="r4">'.$node->title.'</td><td bgcolor="grey" align="right">1</td></tr></table>>');
+     $label = '<<table border="0" cellborder="0" cellpadding="3" bgcolor="white"><tr><td bgcolor="black" align="center" colspan="2"><font color="white">'.$node->type.'</font></td></tr>';
+     $label .= '<tr><td align="left" port="r4">'.$node->title.'</td></tr>';
+     $fields = variable_get('graphviz_'.$node->type.'_fields', array());
+     foreach ($fields as $field) 
+     	$label .='<tr><td align="left" port="r4">'.$field.'</td></tr>';
+     $label .= '</table>>';
+     gv::setv($n,'label',$label);
      switch ($node->type) {
         case 'page':
            gv::setv($n,'shape','component');
@@ -144,6 +173,7 @@ function graphviz_process($text) {
            gv::setv($n,'shape','folder');
            break; 
      } 
+     dpm(variable_get('graphviz_'.$node->type.'_fields', array()));
    }
    while (gv::ok($e)) {
       $e = gv::nextout($n,$e);
@@ -163,9 +193,10 @@ function graphviz_process($text) {
   // Render desired formats.
   $output = '';
   $outpath = file_create_path($outdir .'/'. md5($text) );
-  if (file_exists($outpath.'.svg') || ( gv::render($g,'svg',$outpath.'.svg') && gv::render($g,'cmapx',$outpath.'.map')) ) {
-  	$output .= '<div class="graphviz graphviz-"'. $formats[$format]['format'] .'>';
-    $output .= '<img src="'. file_create_url($outpath).'.svg" ';
+  $format = variable_get('graphviz_format', 'svg');
+  if (file_exists($outpath.'.'.$format) || ( gv::render($g,$format,$outpath.'.'.$format) && gv::render($g,'cmapx',$outpath.'.map')) ) {
+  	$output .= '<div class="graphviz graphviz-'.$format.'">';
+    $output .= '<img src="'. file_create_url($outpath).'.'.$format.'" ';
     $map = file_get_contents($outpath.'.map');
     $match = array();
     if (preg_match('/<map[^>]*id\s*=\s*"(.*?)"/', $map, $match)) {
@@ -175,9 +206,10 @@ function graphviz_process($text) {
     $output .= $map;
     $output .= "\n";
     $output .= '</div>';
+    //dpm($output);
   } else {
     $msg = 'Graphviz encountered an error while rendering to format %format:%outfile<br />';
-    $arg = array('%format' => 'svg','%outfile' => $outpath);
+    $arg = array('%format' => $format,'%outfile' => $outpath);
     drupal_set_message(t($msg, $arg), 'error');
     watchdog('graphviz filter', $msg, $arg, WATCHDOG_ERROR);
   }

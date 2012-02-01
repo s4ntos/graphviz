@@ -175,7 +175,7 @@ function graphviz_process($text) {
      $node_complete=node_load(array('nid'=>$node->nid));
      foreach ($fields as $field)
         if (!empty($field)){
-        	$something=$node_complete->$field;
+            $something=$node_complete->$field;
      	    $label .='<tr><td align="left" port="r4">'.$field.':'.$something[0]['value'].'</td></tr>';
         }
      $label .= '</table>>';

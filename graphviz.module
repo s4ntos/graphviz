@@ -92,7 +92,7 @@ function _graphviz_settings() {
     '#title' => t('Selectable format types for images'),
     '#description' => t('Select the type of image that will be produced.'),
     '#type' => 'select',
-    '#defaul_value' => variable_get('graphviz_format',t('svg')),
+    '#default_value' => variable_get('graphviz_format',t('svg')),
     '#options' => array('svg' => t('svg'), 'png' => t('png')),
   );
   
@@ -140,7 +140,7 @@ function _graphviz_settings() {
 	       $form['graphviz']['graphviz_'.$nodetype]['graphviz_'.$nodetype.'_shape'] = array(
 	           '#title' => t('Selectable format of shape'),
 	           '#type' => 'select',
-	           '#defaul_value' => variable_get('graphviz_'.$nodetype.'_shape','component'),
+	           '#default_value' => variable_get('graphviz_'.$nodetype.'_shape','component'),
 	           '#options' => array('component' => t('component'), 'note' => t('note'), 
 	                               'box3d' => t('box3d'), 'oval' => t('oval'),
 	                               'tab' => t('tab'), 'house' => t('house'),
